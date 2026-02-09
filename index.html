@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ledger View</title>
+
+<style>
+body { font-family: system-ui; margin: 0; background:#f5f5f5 }
+header { padding: 10px; background:#111; color:#fff }
+.filters { padding:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px }
+input, select { padding:8px }
+.card { background:#fff; margin:10px; padding:10px; border-radius:10px }
+</style>
+</head>
+
+<body>
+
+<header>Ledger – FY 25-26</header>
+
+<div class="filters" id="filters"></div>
+<div id="list"></div>
+
+<script>
+const API = 'https://wandering-speed-a1af.rkknitfabsachin.workers.dev';
+
+let page = 1;
+let loading = false;
+let allData = [];
+
+async function loadData() {
+  if (loading) return;
+  loading = true;
+
+  const res = await fetch(`${API}?page=${page}`);
+  const json = await res.json();
+
+  allData.push(...json.rows);
+  renderFilters();
+  renderList(allData);
+
+  if (json.hasMore) page++;
+  loading = false;
+}
+
+function renderFilters() {
+  const keys = ['date','bill','party','location','item','width','lot','colour','transport','entry'];
+  const box = document.getElementById('filters');
+  box.innerHTML = '';
+
+  keys.forEach(k => {
+    const input = document.createElement('input');
+    input.placeholder = 'Filter ' + k;
+    input.oninput = () => applyFilters();
+    input.dataset.key = k;
+    box.appendChild(input);
+  });
+}
+
+function applyFilters() {
+  const inputs = document.querySelectorAll('.filters input');
+  let filtered = allData;
+
+  inputs.forEach(i => {
+    if (i.value) {
+      filtered = filtered.filter(r =>
+        String(r[i.dataset.key] || '').toLowerCase().includes(i.value.toLowerCase())
+      );
+    }
+  });
+
+  renderList(filtered);
+}
+
+function renderList(data) {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  data.forEach(r => {
+    list.innerHTML += `
+      <div class="card">
+        <b>${r.party}</b><br>
+        ${r.item} | ${r.colour}<br>
+        Bill: ${r.bill} | ${r.total}<br>
+        ${r.location} | ${r.transport}
+      </div>`;
+  });
+}
+
+loadData();
+</script>
+
+</body>
+</html>
