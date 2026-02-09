@@ -116,16 +116,21 @@ async function loadData() {
   if (loading) return;
   loading = true;
 
-  const res = await fetch(`${API}?page=${page}`);
-  const json = await res.json();
+  while (true) {
+    const res = await fetch(`${API}?page=${page}`);
+    const json = await res.json();
 
-  allData.push(...json.rows);
+    allData.push(...json.rows);
+
+    if (!json.hasMore) break;
+    page++;
+  }
+
   renderFilters();
   applyFilters();
-
-  if (json.hasMore) page++;
   loading = false;
 }
+
 
 function renderFilters() {
   const box = document.getElementById('filters');
