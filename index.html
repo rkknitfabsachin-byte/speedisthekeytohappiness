@@ -1,32 +1,116 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ledger View</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger Viewer</title>
 
 <style>
-body { font-family: system-ui; margin: 0; background:#f5f5f5 }
-header { padding: 10px; background:#111; color:#fff }
-.filters { padding:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px }
-input, select { padding:8px }
-.card { background:#fff; margin:10px; padding:10px; border-radius:10px }
+:root {
+  --glass-bg: rgba(255,255,255,0.65);
+  --glass-border: rgba(255,255,255,0.3);
+  --shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont;
+  background: linear-gradient(135deg, #e6f0ff, #f7fbff);
+}
+
+header {
+  padding: 14px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 18px;
+  backdrop-filter: blur(10px);
+}
+
+.filters {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(12px);
+}
+
+.filters input {
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.list {
+  padding: 10px;
+}
+
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.label {
+  opacity: 0.6;
+}
+
+.value {
+  font-weight: 600;
+}
+
+.total {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0b5cff;
+}
 </style>
 </head>
 
 <body>
 
-<header>Ledger – FY 25-26</header>
+<header>📘 Ledger – FY 25-26</header>
 
 <div class="filters" id="filters"></div>
-<div id="list"></div>
+<div class="list" id="list"></div>
 
 <script>
 const API = 'https://wandering-speed-a1af.rkknitfabsachin.workers.dev';
 
 let page = 1;
-let loading = false;
 let allData = [];
+let loading = false;
+
+const FILTER_KEYS = [
+  'date','bill','party','location','item',
+  'width','lot','colour','transport','entry'
+];
+
+function formatNumber(val) {
+  if (!val || isNaN(val)) return '—';
+  return Number(val).toFixed(2);
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB');
+}
 
 async function loadData() {
   if (loading) return;
@@ -37,22 +121,21 @@ async function loadData() {
 
   allData.push(...json.rows);
   renderFilters();
-  renderList(allData);
+  applyFilters();
 
   if (json.hasMore) page++;
   loading = false;
 }
 
 function renderFilters() {
-  const keys = ['date','bill','party','location','item','width','lot','colour','transport','entry'];
   const box = document.getElementById('filters');
-  box.innerHTML = '';
+  if (box.children.length) return;
 
-  keys.forEach(k => {
+  FILTER_KEYS.forEach(k => {
     const input = document.createElement('input');
-    input.placeholder = 'Filter ' + k;
-    input.oninput = () => applyFilters();
+    input.placeholder = 'Filter ' + k.toUpperCase();
     input.dataset.key = k;
+    input.oninput = applyFilters;
     box.appendChild(input);
   });
 }
@@ -61,10 +144,13 @@ function applyFilters() {
   const inputs = document.querySelectorAll('.filters input');
   let filtered = allData;
 
-  inputs.forEach(i => {
-    if (i.value) {
+  inputs.forEach(inp => {
+    if (inp.value.trim()) {
+      const v = inp.value.toLowerCase();
       filtered = filtered.filter(r =>
-        String(r[i.dataset.key] || '').toLowerCase().includes(i.value.toLowerCase())
+        String(r[inp.dataset.key] || '')
+          .toLowerCase()
+          .includes(v)
       );
     }
   });
@@ -75,14 +161,22 @@ function applyFilters() {
 function renderList(data) {
   const list = document.getElementById('list');
   list.innerHTML = '';
+
   data.forEach(r => {
     list.innerHTML += `
       <div class="card">
-        <b>${r.party}</b><br>
-        ${r.item} | ${r.colour}<br>
-        Bill: ${r.bill} | ${r.total}<br>
-        ${r.location} | ${r.transport}
-      </div>`;
+        <div class="row"><span class="label">Date</span><span class="value">${formatDate(r.date)}</span></div>
+        <div class="row"><span class="label">Bill No</span><span class="value">${r.bill || '—'}</span></div>
+        <div class="row"><span class="label">Party</span><span class="value">${r.party || '—'}</span></div>
+        <div class="row"><span class="label">Item</span><span class="value">${r.item || '—'}</span></div>
+        <div class="row"><span class="label">Colour</span><span class="value">${r.colour || '—'}</span></div>
+        <div class="row"><span class="label">Lot</span><span class="value">${r.lot || '—'}</span></div>
+        <div class="row"><span class="label">Width</span><span class="value">${r.width || '—'}</span></div>
+        <div class="row"><span class="label">Transport</span><span class="value">${r.transport || '—'}</span></div>
+
+        <div class="total">₹ ${formatNumber(r.total)}</div>
+      </div>
+    `;
   });
 }
 
