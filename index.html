@@ -116,20 +116,33 @@ async function loadData() {
   if (loading) return;
   loading = true;
 
-  while (true) {
+  try {
     const res = await fetch(`${API}?page=${page}`);
-    const json = await res.json();
 
+    if (!res.ok) {
+      console.error('API error', res.status);
+      loading = false;
+      return;
+    }
+
+    const json = await res.json();
     allData.push(...json.rows);
 
-    if (!json.hasMore) break;
-    page++;
-  }
+    if (json.hasMore) {
+      page++;
+      await loadData();   // load next page safely
+    } else {
+      renderFilters();
+      applyFilters();
+      loading = false;
+    }
 
-  renderFilters();
-  applyFilters();
-  loading = false;
+  } catch (err) {
+    console.error('Fetch failed', err);
+    loading = false;
+  }
 }
+
 
 
 function renderFilters() {
