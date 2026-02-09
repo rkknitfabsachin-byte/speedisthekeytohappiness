@@ -1,53 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Ledger Viewer</title>
 
 <style>
 :root {
-  --glass-bg: rgba(255,255,255,0.65);
-  --glass-border: rgba(255,255,255,0.35);
+  --glass: rgba(255,255,255,0.7);
+  --border: rgba(255,255,255,0.35);
   --shadow: 0 10px 30px rgba(0,0,0,0.12);
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont;
-  background: linear-gradient(135deg, #eaf2ff, #fdfefe);
+  font-family: system-ui, -apple-system;
+  background: linear-gradient(135deg,#eaf2ff,#ffffff);
 }
 
 header {
   padding: 14px;
-  text-align: center;
   font-weight: 700;
-  font-size: 18px;
-  backdrop-filter: blur(10px);
+  text-align: center;
 }
 
 .filters {
   position: sticky;
   top: 0;
-  z-index: 10;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
-  gap: 10px;
-  padding: 12px;
   background: rgba(255,255,255,0.85);
   backdrop-filter: blur(12px);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(140px,1fr));
+  gap: 8px;
+  z-index: 10;
 }
 
 .filters input {
-  padding: 9px 12px;
-  border-radius: 16px;
+  padding: 8px 10px;
+  border-radius: 14px;
   border: 1px solid #ddd;
-  font-size: 13px;
-  outline: none;
 }
 
-.filters input:focus {
-  border-color: #0b5cff;
+#loading {
+  text-align: center;
+  padding: 16px;
+  opacity: 0.7;
 }
 
 .list {
@@ -55,42 +53,30 @@ header {
 }
 
 .card {
-  background: var(--glass-bg);
+  background: var(--glass);
   backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  border-radius: 22px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
   box-shadow: var(--shadow);
   padding: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
   font-size: 13px;
+  margin-bottom: 6px;
 }
 
-.label {
-  opacity: 0.55;
-}
-
-.value {
-  font-weight: 600;
-}
+.label { opacity: 0.55; }
+.value { font-weight: 600; }
 
 .total {
-  margin-top: 10px;
-  font-size: 16px;
+  margin-top: 8px;
+  text-align: right;
   font-weight: 800;
   color: #0b5cff;
-  text-align: right;
-}
-
-#loading {
-  text-align: center;
-  padding: 20px;
-  opacity: 0.7;
 }
 </style>
 </head>
@@ -106,56 +92,56 @@ header {
 <script>
 /* ================= CONFIG ================= */
 const API = 'https://wandering-speed-a1af.rkknitfabsachin.workers.dev';
+const MAX_PAGES = 200; // safety cap (200 × 100 = 20,000 rows)
 
 /* ================= STATE ================= */
 let page = 1;
-let loading = false;
 let allData = [];
+let loading = false;
 
-/* ================= FILTER FIELDS ================= */
+/* ================= FILTER KEYS ================= */
 const FILTER_KEYS = [
   'date','bill','party','location','item',
   'width','lot','colour','transport','entry'
 ];
 
-/* ================= FORMATTERS ================= */
-function formatNumber(v) {
-  if (v === null || v === undefined || v === '' || isNaN(v)) return '—';
-  return Number(v).toFixed(2);
-}
+/* ================= FORMAT ================= */
+const fmtNum = v =>
+  v !== null && v !== '' && !isNaN(v) ? Number(v).toFixed(2) : '—';
 
-function formatDate(v) {
-  if (!v) return '—';
+const fmtDate = v => {
   const d = new Date(v);
   return isNaN(d) ? '—' : d.toLocaleDateString('en-GB');
-}
+};
 
-/* ================= LOAD DATA (SAFE) ================= */
-async function loadData() {
+/* ================= LOAD DATA (BULLETPROOF) ================= */
+async function loadAllData() {
   if (loading) return;
   loading = true;
 
-  try {
-    const res = await fetch(`${API}?page=${page}`);
-    if (!res.ok) throw new Error('API error');
+  for (let i = 0; i < MAX_PAGES; i++) {
+    try {
+      const res = await fetch(`${API}?page=${page}`);
+      if (!res.ok) break;
 
-    const json = await res.json();
-    allData.push(...json.rows);
+      const json = await res.json();
+      if (!json.rows || json.rows.length === 0) break;
 
-    if (json.hasMore) {
+      allData.push(...json.rows);
       page++;
-      await loadData();   // load next page safely
-    } else {
-      document.getElementById('loading').style.display = 'none';
+
+      // render progressively (FAST FEEL)
       renderFilters();
       applyFilters();
-      loading = false;
+
+    } catch (e) {
+      console.error('Fetch failed', e);
+      break;
     }
-  } catch (e) {
-    console.error(e);
-    document.getElementById('loading').innerText = 'Failed to load data';
-    loading = false;
   }
+
+  document.getElementById('loading').style.display = 'none';
+  loading = false;
 }
 
 /* ================= FILTER UI ================= */
@@ -175,23 +161,21 @@ function renderFilters() {
 /* ================= APPLY FILTERS ================= */
 function applyFilters() {
   const inputs = document.querySelectorAll('.filters input');
-  let filtered = allData;
+  let data = allData;
 
   inputs.forEach(inp => {
     if (inp.value.trim()) {
-      const val = inp.value.toLowerCase();
-      filtered = filtered.filter(r =>
-        String(r[inp.dataset.key] || '')
-          .toLowerCase()
-          .includes(val)
+      const v = inp.value.toLowerCase();
+      data = data.filter(r =>
+        String(r[inp.dataset.key] || '').toLowerCase().includes(v)
       );
     }
   });
 
-  renderList(filtered);
+  renderList(data);
 }
 
-/* ================= RENDER CARDS ================= */
+/* ================= RENDER ================= */
 function renderList(data) {
   const list = document.getElementById('list');
   list.innerHTML = '';
@@ -199,8 +183,8 @@ function renderList(data) {
   data.forEach(r => {
     list.innerHTML += `
       <div class="card">
-        <div class="row"><span class="label">Date</span><span class="value">${formatDate(r.date)}</span></div>
-        <div class="row"><span class="label">Bill No</span><span class="value">${r.bill || '—'}</span></div>
+        <div class="row"><span class="label">Date</span><span class="value">${fmtDate(r.date)}</span></div>
+        <div class="row"><span class="label">Bill</span><span class="value">${r.bill || '—'}</span></div>
         <div class="row"><span class="label">Party</span><span class="value">${r.party || '—'}</span></div>
         <div class="row"><span class="label">Location</span><span class="value">${r.location || '—'}</span></div>
         <div class="row"><span class="label">Item</span><span class="value">${r.item || '—'}</span></div>
@@ -208,15 +192,14 @@ function renderList(data) {
         <div class="row"><span class="label">Lot</span><span class="value">${r.lot || '—'}</span></div>
         <div class="row"><span class="label">Width</span><span class="value">${r.width || '—'}</span></div>
         <div class="row"><span class="label">Transport</span><span class="value">${r.transport || '—'}</span></div>
-
-        <div class="total">₹ ${formatNumber(r.total)}</div>
+        <div class="total">₹ ${fmtNum(r.total)}</div>
       </div>
     `;
   });
 }
 
 /* ================= START ================= */
-loadData();
+loadAllData();
 </script>
 
 </body>
