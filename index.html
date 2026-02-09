@@ -8,14 +8,14 @@
 <style>
 :root {
   --glass-bg: rgba(255,255,255,0.65);
-  --glass-border: rgba(255,255,255,0.3);
-  --shadow: 0 8px 24px rgba(0,0,0,0.12);
+  --glass-border: rgba(255,255,255,0.35);
+  --shadow: 0 10px 30px rgba(0,0,0,0.12);
 }
 
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont;
-  background: linear-gradient(135deg, #e6f0ff, #f7fbff);
+  background: linear-gradient(135deg, #eaf2ff, #fdfefe);
 }
 
 header {
@@ -34,29 +34,34 @@ header {
   grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
   gap: 10px;
   padding: 12px;
-  background: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.85);
   backdrop-filter: blur(12px);
 }
 
 .filters input {
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 9px 12px;
+  border-radius: 16px;
   border: 1px solid #ddd;
   font-size: 13px;
+  outline: none;
+}
+
+.filters input:focus {
+  border-color: #0b5cff;
 }
 
 .list {
-  padding: 10px;
+  padding: 12px;
 }
 
 .card {
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: 22px;
   box-shadow: var(--shadow);
   padding: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .row {
@@ -67,7 +72,7 @@ header {
 }
 
 .label {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .value {
@@ -75,10 +80,17 @@ header {
 }
 
 .total {
-  margin-top: 8px;
-  font-size: 15px;
+  margin-top: 10px;
+  font-size: 16px;
   font-weight: 800;
   color: #0b5cff;
+  text-align: right;
+}
+
+#loading {
+  text-align: center;
+  padding: 20px;
+  opacity: 0.7;
 }
 </style>
 </head>
@@ -88,42 +100,44 @@ header {
 <header>📘 Ledger – FY 25-26</header>
 
 <div class="filters" id="filters"></div>
+<div id="loading">Loading records…</div>
 <div class="list" id="list"></div>
 
 <script>
+/* ================= CONFIG ================= */
 const API = 'https://wandering-speed-a1af.rkknitfabsachin.workers.dev';
 
+/* ================= STATE ================= */
 let page = 1;
-let allData = [];
 let loading = false;
+let allData = [];
 
+/* ================= FILTER FIELDS ================= */
 const FILTER_KEYS = [
   'date','bill','party','location','item',
   'width','lot','colour','transport','entry'
 ];
 
-function formatNumber(val) {
-  if (!val || isNaN(val)) return '—';
-  return Number(val).toFixed(2);
+/* ================= FORMATTERS ================= */
+function formatNumber(v) {
+  if (v === null || v === undefined || v === '' || isNaN(v)) return '—';
+  return Number(v).toFixed(2);
 }
 
-function formatDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-GB');
+function formatDate(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d) ? '—' : d.toLocaleDateString('en-GB');
 }
 
+/* ================= LOAD DATA (SAFE) ================= */
 async function loadData() {
   if (loading) return;
   loading = true;
 
   try {
     const res = await fetch(`${API}?page=${page}`);
-
-    if (!res.ok) {
-      console.error('API error', res.status);
-      loading = false;
-      return;
-    }
+    if (!res.ok) throw new Error('API error');
 
     const json = await res.json();
     allData.push(...json.rows);
@@ -132,19 +146,19 @@ async function loadData() {
       page++;
       await loadData();   // load next page safely
     } else {
+      document.getElementById('loading').style.display = 'none';
       renderFilters();
       applyFilters();
       loading = false;
     }
-
-  } catch (err) {
-    console.error('Fetch failed', err);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('loading').innerText = 'Failed to load data';
     loading = false;
   }
 }
 
-
-
+/* ================= FILTER UI ================= */
 function renderFilters() {
   const box = document.getElementById('filters');
   if (box.children.length) return;
@@ -158,17 +172,18 @@ function renderFilters() {
   });
 }
 
+/* ================= APPLY FILTERS ================= */
 function applyFilters() {
   const inputs = document.querySelectorAll('.filters input');
   let filtered = allData;
 
   inputs.forEach(inp => {
     if (inp.value.trim()) {
-      const v = inp.value.toLowerCase();
+      const val = inp.value.toLowerCase();
       filtered = filtered.filter(r =>
         String(r[inp.dataset.key] || '')
           .toLowerCase()
-          .includes(v)
+          .includes(val)
       );
     }
   });
@@ -176,6 +191,7 @@ function applyFilters() {
   renderList(filtered);
 }
 
+/* ================= RENDER CARDS ================= */
 function renderList(data) {
   const list = document.getElementById('list');
   list.innerHTML = '';
@@ -186,6 +202,7 @@ function renderList(data) {
         <div class="row"><span class="label">Date</span><span class="value">${formatDate(r.date)}</span></div>
         <div class="row"><span class="label">Bill No</span><span class="value">${r.bill || '—'}</span></div>
         <div class="row"><span class="label">Party</span><span class="value">${r.party || '—'}</span></div>
+        <div class="row"><span class="label">Location</span><span class="value">${r.location || '—'}</span></div>
         <div class="row"><span class="label">Item</span><span class="value">${r.item || '—'}</span></div>
         <div class="row"><span class="label">Colour</span><span class="value">${r.colour || '—'}</span></div>
         <div class="row"><span class="label">Lot</span><span class="value">${r.lot || '—'}</span></div>
@@ -198,6 +215,7 @@ function renderList(data) {
   });
 }
 
+/* ================= START ================= */
 loadData();
 </script>
 
